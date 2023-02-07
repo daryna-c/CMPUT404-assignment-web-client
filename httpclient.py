@@ -34,6 +34,8 @@ class HTTPResponse(object):
 
 class HTTPClient(object):
     #def get_host_port(self,url):
+    #    netloc = urllib.parse.urlparse(url).netloc
+
 
     def connect(self, host, port):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -68,13 +70,26 @@ class HTTPClient(object):
         return buffer.decode('utf-8')
 
     def GET(self, url, args=None):
-        code = 500
-        body = ""
+        parsedUrl = urllib.parse.urlparse(url)
+        self.connect(parsedUrl.netloc, 8080)
+        if parsedUrl.query=='' and args==None:
+            self.sendall("GET %s HTTP/1.1\r\nHost: %s\r\n\n" % (parsedUrl.path, parsedUrl.netloc))
+        else:
+            if args==None:
+                queryPart = parsedUrl.query
+            else:
+                if type(args) == str:
+                    queryPart = args
+                else:
+                    assert(False, "ERROR: Args are a dict. Handle that!")
+            self.sendall("GET %s?%s HTTP/1.1\r\nHost: %s\r\n\n" % (parsedUrl.path, queryPart, parsedUrl.netloc))
+        result = self.recvall(self.socket).strip()
+        code = re.search("HTTP\/1\.1\s+(\d{3})\s", result).group(1)
+        self.close()
         return HTTPResponse(code, body)
 
     def POST(self, url, args=None):
-        code = 500
-        body = ""
+        
         return HTTPResponse(code, body)
 
     def command(self, url, command="GET", args=None):
