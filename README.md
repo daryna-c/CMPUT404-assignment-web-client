@@ -21,6 +21,9 @@ compatible) http://docs.python.org/2/library/socketserver.html
 References:
 
     Author: Regexident https://stackoverflow.com/users/227536/regexident
-    
+    Title: regex find all the strings preceded by = and ending in &
     https://stackoverflow.com/a/8141383
+
+    Author: Fahad Naveed
+    https://eclass.srv.ualberta.ca/mod/forum/discuss.php?d=2196981
 

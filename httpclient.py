@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # coding: utf-8
-# Copyright 2016 Abram Hindle, https://github.com/tywtyw2002, and https://github.com/treedust
+# Copyright 2023 Abram Hindle, https://github.com/tywtyw2002, and https://github.com/treedust, Daryna Chernyavska
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,11 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# References:
+#   Author: Regexident https://stackoverflow.com/users/227536/regexident
+#   Title: regex find all the strings preceded by = and ending in &
+#   https://stackoverflow.com/a/8141383
+#
+#   Author: Fahad Naveed
+#   https://eclass.srv.ualberta.ca/mod/forum/discuss.php?d=2196981
+
+
 # Do not use urllib's HTTP GET and POST mechanisms.
 # Write your own HTTP GET and POST
 # The point is to understand what you have to send and get experience with it
 
-import sys
+import sys, time
 import socket
 import re
 # you may use urllib to encode data appropriately
@@ -33,10 +42,6 @@ class HTTPResponse(object):
         self.body = body
 
 class HTTPClient(object):
-    #def get_host_port(self,url):
-    #    netloc = urllib.parse.urlparse(url).netloc
-
-
     def connect(self, host, port):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((host, port))
@@ -49,21 +54,8 @@ class HTTPClient(object):
         return None
 
     def get_body(self, data):
-        
-        """ try:
-            contentLength = int(re.search("Content-Length:\s(.+)\s", data).group(1))
-            totalLength = len(data)
-            return data[totalLength-contentLength-2:totalLength-2]
-        except:
-            return "" """
         last = data.rfind("\r\n\r\n")
-        print("last =", last)
         return data[last+4: len(data)]
-        """while type(re.search("\S+", temp)) == type(re.search("9", "000000")):
-            secondlast = data.rfind("\r\n")
-            temp2 = temp
-            temp = temp2.rfind("\r\n", last+1, len(temp2))
-        return temp """
     
     def sendall(self, data):
         self.socket.sendall(data.encode('utf-8'))
@@ -92,7 +84,7 @@ class HTTPClient(object):
 
     def getPort(self, netloc):
         if netloc.find(":") == -1:
-            return 8080
+            return 80
         else:
             parsedNetloc = re.search("(.+):(.+)", netloc)
             return int(parsedNetloc.group(2))
@@ -101,10 +93,11 @@ class HTTPClient(object):
         parsedUrl = urllib.parse.urlsplit(url)
         if parsedUrl.scheme != "http": 
             raise ValueError("Error: no url scheme provided")
-        #print(parsedUrl._asdict)
+        if parsedUrl.path == "":
+            parsedUrl = parsedUrl._replace(path="/")
         self.connect(self.getHost(parsedUrl.netloc), self.getPort(parsedUrl.netloc))
         if parsedUrl.query=='' and args==None:
-            request = "GET %s HTTP/1.1\r\nHost: %s\r\n\n" % (parsedUrl.path, self.getHost(parsedUrl.netloc))
+            request = "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: me\r\nConnection: keep-alive\r\nAccept: */*\r\n\r\n" % (parsedUrl.path, self.getHost(parsedUrl.netloc))
         else:
             if args==None:
                 queryPart = parsedUrl.query
@@ -113,33 +106,36 @@ class HTTPClient(object):
                     queryPart = args
                 else:
                     queryPart = urllib.parse.urlencode(args)
-            request = "GET %s?%s HTTP/1.1\r\nHost: %s\r\n\n" % (parsedUrl.path, queryPart, self.getHost(parsedUrl.netloc))
+            request = "GET %s?%s HTTP/1.1\r\nHost: %s\r\nUser-Agent: me\r\nConnection: keep-alive\r\nAccept: */*\r\n\r\n" % (parsedUrl.path, queryPart, self.getHost(parsedUrl.netloc))
         self.sendall(request)
+        if parsedUrl.netloc == "slashdot.org":
+            time.sleep(1)
         self.socket.shutdown(socket.SHUT_WR)
         result = self.recvall(self.socket).strip()
         self.socket.close()
         code = self.get_code(result)
         body = self.get_body(result)
-        #print("RESULT:\n%s\n=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+" % result)
-        #print("Code: [%i]" % code)
-        #print("Body: [%s]" % body)
+        print(result)
         return HTTPResponse(code, body)
 
     def POST(self, url, args=None):
         parsedUrl = urllib.parse.urlsplit(url)
         if parsedUrl.scheme != "http": 
             raise ValueError("Error: no url scheme provided")
+        if parsedUrl.path == "":
+            parsedUrl = parsedUrl._replace(path="/")
         self.connect(self.getHost(parsedUrl.netloc), self.getPort(parsedUrl.netloc))
         if args == None:
-            request = "POST {} HTTP/1.1\r\nHost: {}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 0\r\n\r\n".format(parsedUrl.path, self.getHost(parsedUrl.netloc))
+            request = "POST {} HTTP/1.1\r\nHost: {}\r\nUser-Agent: me\r\nConnection: keep-alive\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 0\r\n\r\n"
+            request = request.format(parsedUrl.path, self.getHost(parsedUrl.netloc))
         else:
             requestBody = urllib.parse.urlencode(args)
-            request = "POST {} HTTP/1.1\r\nHost: {}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}"
+            request = "POST {} HTTP/1.1\r\nHost: {}\r\nUser-Agent: me\r\nConnection: keep-alive\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}"
             request = request.format(parsedUrl.path, self.getHost(parsedUrl.netloc), len(requestBody), requestBody)
         self.sendall(request)
-        print("REQUEST:\n%s\n+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n" % request)
         self.socket.shutdown(socket.SHUT_WR)
         result = self.recvall(self.socket).strip()
+        print(result)
         self.socket.close()
         code = self.get_code(result)
         body = self.get_body(result)
@@ -159,9 +155,5 @@ if __name__ == "__main__":
         sys.exit(1)
     elif (len(sys.argv) == 3):
         print(client.command( sys.argv[2], sys.argv[1] ))
-        #req = client.command( sys.argv[2], sys.argv[1] )
     else:
         print(client.command( sys.argv[1] ))
-        #req = client.command( sys.argv[1] )
-    #print("Code: [%s]" % req.code)
-    #print("Body: [%s]" % req.body)
