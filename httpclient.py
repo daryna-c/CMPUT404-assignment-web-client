@@ -43,13 +43,27 @@ class HTTPClient(object):
         return None
 
     def get_code(self, data):
-        return None
+        return int(re.search("HTTP\/\d\.?\d?\s+(\d{3})\s", data).group(1))
 
     def get_headers(self,data):
         return None
 
     def get_body(self, data):
-        return None
+        
+        """ try:
+            contentLength = int(re.search("Content-Length:\s(.+)\s", data).group(1))
+            totalLength = len(data)
+            return data[totalLength-contentLength-2:totalLength-2]
+        except:
+            return "" """
+        last = data.rfind("\r\n\r\n")
+        print("last =", last)
+        return data[last+4: len(data)]
+        """while type(re.search("\S+", temp)) == type(re.search("9", "000000")):
+            secondlast = data.rfind("\r\n")
+            temp2 = temp
+            temp = temp2.rfind("\r\n", last+1, len(temp2))
+        return temp """
     
     def sendall(self, data):
         self.socket.sendall(data.encode('utf-8'))
@@ -69,11 +83,28 @@ class HTTPClient(object):
                 done = not part
         return buffer.decode('utf-8')
 
+    def getHost(self, netloc):
+        if netloc.find(":") == -1:
+            return netloc
+        else:
+            parsedNetloc = re.search("(.+):(.+)", netloc)
+            return parsedNetloc.group(1)
+
+    def getPort(self, netloc):
+        if netloc.find(":") == -1:
+            return 8080
+        else:
+            parsedNetloc = re.search("(.+):(.+)", netloc)
+            return int(parsedNetloc.group(2))
+
     def GET(self, url, args=None):
-        parsedUrl = urllib.parse.urlparse(url)
-        self.connect(parsedUrl.netloc, 8080)
+        parsedUrl = urllib.parse.urlsplit(url)
+        if parsedUrl.scheme != "http": 
+            raise ValueError("Error: no url scheme provided")
+        #print(parsedUrl._asdict)
+        self.connect(self.getHost(parsedUrl.netloc), self.getPort(parsedUrl.netloc))
         if parsedUrl.query=='' and args==None:
-            self.sendall("GET %s HTTP/1.1\r\nHost: %s\r\n\n" % (parsedUrl.path, parsedUrl.netloc))
+            request = "GET %s HTTP/1.1\r\nHost: %s\r\n\n" % (parsedUrl.path, self.getHost(parsedUrl.netloc))
         else:
             if args==None:
                 queryPart = parsedUrl.query
@@ -81,15 +112,37 @@ class HTTPClient(object):
                 if type(args) == str:
                     queryPart = args
                 else:
-                    assert(False, "ERROR: Args are a dict. Handle that!")
-            self.sendall("GET %s?%s HTTP/1.1\r\nHost: %s\r\n\n" % (parsedUrl.path, queryPart, parsedUrl.netloc))
+                    queryPart = urllib.parse.urlencode(args)
+            request = "GET %s?%s HTTP/1.1\r\nHost: %s\r\n\n" % (parsedUrl.path, queryPart, self.getHost(parsedUrl.netloc))
+        self.sendall(request)
+        self.socket.shutdown(socket.SHUT_WR)
         result = self.recvall(self.socket).strip()
-        code = re.search("HTTP\/1\.1\s+(\d{3})\s", result).group(1)
-        self.close()
+        self.socket.close()
+        code = self.get_code(result)
+        body = self.get_body(result)
+        #print("RESULT:\n%s\n=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+" % result)
+        #print("Code: [%i]" % code)
+        #print("Body: [%s]" % body)
         return HTTPResponse(code, body)
 
     def POST(self, url, args=None):
-        
+        parsedUrl = urllib.parse.urlsplit(url)
+        if parsedUrl.scheme != "http": 
+            raise ValueError("Error: no url scheme provided")
+        self.connect(self.getHost(parsedUrl.netloc), self.getPort(parsedUrl.netloc))
+        if args == None:
+            request = "POST {} HTTP/1.1\r\nHost: {}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 0\r\n\r\n".format(parsedUrl.path, self.getHost(parsedUrl.netloc))
+        else:
+            requestBody = urllib.parse.urlencode(args)
+            request = "POST {} HTTP/1.1\r\nHost: {}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}"
+            request = request.format(parsedUrl.path, self.getHost(parsedUrl.netloc), len(requestBody), requestBody)
+        self.sendall(request)
+        print("REQUEST:\n%s\n+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n" % request)
+        self.socket.shutdown(socket.SHUT_WR)
+        result = self.recvall(self.socket).strip()
+        self.socket.close()
+        code = self.get_code(result)
+        body = self.get_body(result)
         return HTTPResponse(code, body)
 
     def command(self, url, command="GET", args=None):
@@ -106,5 +159,9 @@ if __name__ == "__main__":
         sys.exit(1)
     elif (len(sys.argv) == 3):
         print(client.command( sys.argv[2], sys.argv[1] ))
+        #req = client.command( sys.argv[2], sys.argv[1] )
     else:
         print(client.command( sys.argv[1] ))
+        #req = client.command( sys.argv[1] )
+    #print("Code: [%s]" % req.code)
+    #print("Body: [%s]" % req.body)
